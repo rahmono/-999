@@ -1,10 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { dbService } from '../services/dbService';
 import { Button } from '../components/Button';
 import { useLanguage } from '../contexts/LanguageContext';
-import { TopicImage } from '../types';
+import { TopicImage, Grade, Subject } from '../types';
 
 interface ImageUpload {
     id: string;
@@ -18,6 +18,9 @@ const AdminScreen: React.FC = () => {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'Grade' | 'Subject' | 'Topic'>('Grade');
   const [feedback, setFeedback] = useState('');
+  
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
 
   // Form States
   const [gradeName, setGradeName] = useState('');
@@ -28,14 +31,23 @@ const AdminScreen: React.FC = () => {
   const [selectedSubjectForTopicId, setSelectedSubjectForTopicId] = useState('');
   const [topicImages, setTopicImages] = useState<ImageUpload[]>([]);
 
-  const grades = dbService.getAllGrades();
-  const subjects = dbService.getAllSubjects();
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    const [gData, sData] = await Promise.all([
+        dbService.getAllGrades(),
+        dbService.getAllSubjects()
+    ]);
+    setGrades(gData);
+    setSubjects(sData);
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    // Fix: Explicitly type 'file' as 'File' to avoid 'unknown' type errors for .type property and readAsDataURL argument
     Array.from(files).forEach((file: File) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -62,13 +74,13 @@ const AdminScreen: React.FC = () => {
     setTopicImages(prev => prev.filter(img => img.id !== id));
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     try {
       if (activeTab === 'Grade' && gradeName) {
-        dbService.addGrade(gradeName);
+        await dbService.addGrade(gradeName);
         setGradeName('');
       } else if (activeTab === 'Subject' && subjectName && selectedGradeId) {
-        dbService.addSubject(selectedGradeId, subjectName);
+        await dbService.addSubject(selectedGradeId, subjectName);
         setSubjectName('');
       } else if (activeTab === 'Topic' && topicName && selectedSubjectForTopicId) {
         const imagesToSave: TopicImage[] = topicImages.map(img => ({
@@ -76,7 +88,7 @@ const AdminScreen: React.FC = () => {
             mimeType: img.mimeType,
             order: img.order
         }));
-        dbService.addTopic(selectedSubjectForTopicId, topicName, topicContent, imagesToSave);
+        await dbService.addTopic(selectedSubjectForTopicId, topicName, topicContent, imagesToSave);
         setTopicName('');
         setTopicContent('');
         setTopicImages([]);
@@ -84,6 +96,7 @@ const AdminScreen: React.FC = () => {
         setFeedback(t.fill_error);
         return;
       }
+      await loadData();
       setFeedback(t.success_add);
       setTimeout(() => setFeedback(''), 3000);
     } catch (e) {
@@ -97,7 +110,7 @@ const AdminScreen: React.FC = () => {
       className={`px-4 py-2 text-sm font-semibold rounded-full transition-all ${
         activeTab === name 
           ? 'bg-blue-600 text-white shadow-md' 
-          : 'bg-gray-100 dark:bg-gptDark-input text-gray-600 dark:text-gray-400'
+          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
       }`}
     >
       {label}
@@ -105,7 +118,7 @@ const AdminScreen: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gptDark-bg theme-transition">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900 transition-colors">
       <Header title={t.admin_panel} />
       
       <div className="px-6 py-4 flex gap-3 overflow-x-auto no-scrollbar border-b dark:border-gray-800">
@@ -119,7 +132,7 @@ const AdminScreen: React.FC = () => {
         
         {activeTab === 'Grade' && (
           <input 
-            className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gptDark-input border-none dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50" 
+            className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50" 
             placeholder={t.name_ph} 
             value={gradeName}
             onChange={e => setGradeName(e.target.value)}
@@ -129,7 +142,7 @@ const AdminScreen: React.FC = () => {
         {activeTab === 'Subject' && (
           <div className="space-y-4">
              <select 
-              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gptDark-input border-none dark:text-white outline-none"
+              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none dark:text-white outline-none"
               value={selectedGradeId}
               onChange={e => setSelectedGradeId(e.target.value)}
             >
@@ -137,7 +150,7 @@ const AdminScreen: React.FC = () => {
               {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
             <input 
-              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gptDark-input border-none dark:text-white outline-none" 
+              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none dark:text-white outline-none" 
               placeholder={t.name_ph} 
               value={subjectName}
               onChange={e => setSubjectName(e.target.value)}
@@ -148,56 +161,48 @@ const AdminScreen: React.FC = () => {
         {activeTab === 'Topic' && (
           <div className="space-y-4">
              <select 
-              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gptDark-input border-none dark:text-white outline-none"
+              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none dark:text-white outline-none"
               value={selectedSubjectForTopicId}
               onChange={e => setSelectedSubjectForTopicId(e.target.value)}
             >
               <option value="">{t.select_ph} {t.subject}</option>
+              {/* Fix: Use s.gradeId instead of s.grade_id to match the Subject interface */}
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({grades.find(g => g.id === s.gradeId)?.name})</option>)}
             </select>
             <input 
-              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gptDark-input border-none dark:text-white outline-none" 
+              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none dark:text-white outline-none" 
               placeholder={t.name_ph} 
               value={topicName}
               onChange={e => setTopicName(e.target.value)}
             />
             <textarea
-              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gptDark-input border-none dark:text-white outline-none min-h-[100px] resize-none"
+              className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none dark:text-white outline-none min-h-[100px] resize-none"
               placeholder={t.content_ph}
               value={topicContent}
               onChange={e => setTopicContent(e.target.value)}
             />
 
-            {/* Image Upload Section */}
             <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Расмҳои мавзӯъ (Контекст барои AI):
+                    Расмҳои мавзӯъ:
                 </label>
                 <div className="grid grid-cols-2 gap-4">
                     {topicImages.map((img) => (
-                        <div key={img.id} className="relative bg-gray-50 dark:bg-gptDark-bubble p-2 rounded-xl border dark:border-gray-800">
+                        <div key={img.id} className="relative bg-gray-50 dark:bg-gray-800 p-2 rounded-xl border dark:border-gray-800">
                             <img src={img.preview} alt="preview" className="w-full h-24 object-cover rounded-lg mb-2" />
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-gray-500">Тартиб:</span>
                                 <input 
                                     type="number" 
                                     value={img.order}
                                     onChange={(e) => updateImageOrder(img.id, e.target.value)}
-                                    className="w-12 p-1 text-xs bg-white dark:bg-gptDark-input border dark:border-gray-700 rounded text-center dark:text-white"
+                                    className="w-12 p-1 text-xs bg-white dark:bg-gray-700 border dark:border-gray-700 rounded text-center dark:text-white"
                                 />
-                                <button onClick={() => removeImage(img.id)} className="ml-auto p-1 text-red-500">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
+                                <button onClick={() => removeImage(img.id)} className="ml-auto p-1 text-red-500">Remove</button>
                             </div>
                         </div>
                     ))}
-                    <label className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gptDark-bubble transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400 mb-1">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                        </svg>
-                        <span className="text-xs text-gray-400">Иловаи расм</span>
+                    <label className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <span className="text-xs text-gray-400">+ Иловаи расм</span>
                         <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
                     </label>
                 </div>
@@ -210,7 +215,7 @@ const AdminScreen: React.FC = () => {
         </div>
 
         {feedback && (
-          <div className={`p-4 rounded-2xl text-center text-sm font-medium ${feedback.includes('Error') || feedback === t.fill_error ? 'bg-red-50 text-red-600 dark:bg-red-900/20' : 'bg-green-50 text-green-600 dark:bg-green-900/20'}`}>
+          <div className={`p-4 rounded-2xl text-center text-sm font-medium ${feedback.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
             {feedback}
           </div>
         )}

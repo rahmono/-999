@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dbService } from '../services/dbService';
@@ -8,11 +9,15 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 const GradeScreen: React.FC = () => {
   const [grades, setGrades] = useState<Grade[]>([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { t } = useLanguage();
 
   useEffect(() => {
-    setGrades(dbService.getGrades());
+    dbService.getGrades().then(data => {
+      setGrades(data);
+      setLoading(false);
+    });
   }, []);
 
   const ProfileButton = (
@@ -31,11 +36,15 @@ const GradeScreen: React.FC = () => {
         rightAction={ProfileButton}
       />
       <div className="flex-1 overflow-y-auto">
-        <SelectionList 
-          items={grades} 
-          onSelect={(grade) => navigate(`/subjects/${grade.id}`)}
-          emptyMessage={t.empty_list}
-        />
+        {loading ? (
+            <div className="p-8 text-center text-gray-500">{t.loading}</div>
+        ) : (
+            <SelectionList 
+              items={grades} 
+              onSelect={(grade) => navigate(`/subjects/${grade.id}`)}
+              emptyMessage={t.empty_list}
+            />
+        )}
       </div>
     </div>
   );

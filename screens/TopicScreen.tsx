@@ -1,37 +1,37 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbService } from '../services/dbService';
-import { Topic, Subject } from '../types';
+import { Topic } from '../types';
 import { SelectionList } from '../components/SelectionList';
 import { Header } from '../components/Header';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const TopicScreen: React.FC = () => {
-  // Changed param from bookId to subjectId
   const { subjectId } = useParams<{ subjectId: string }>();
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
 
   useEffect(() => {
     if (subjectId) {
-      setTopics(dbService.getTopics(subjectId));
+      dbService.getTopics(subjectId).then(data => {
+        setTopics(data);
+        setLoading(false);
+      });
     }
   }, [subjectId]);
 
-  const handleBack = () => {
-    // Try to navigate back to the specific grade's subject list
+  const handleBack = async () => {
     if (subjectId) {
-        const s = dbService.getSubjectById(subjectId);
+        const s = await dbService.getSubjectById(subjectId);
         if (s && s.gradeId) {
             navigate(`/subjects/${s.gradeId}`);
             return;
         }
     }
-    
-    // Fallback: If we can't determine the parent subject/grade (e.g. direct link or deleted data),
-    // go to the root of the selection flow (Grades) to prevent getting stuck.
     navigate('/grades');
   };
 
@@ -70,11 +70,15 @@ const TopicScreen: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <SelectionList 
-          items={filteredTopics} 
-          onSelect={(topic) => navigate(`/chat/${topic.id}`)}
-          emptyMessage={t.empty_list}
-        />
+        {loading ? (
+            <div className="p-8 text-center text-gray-500">{t.loading}</div>
+        ) : (
+            <SelectionList 
+              items={filteredTopics} 
+              onSelect={(topic) => navigate(`/chat/${topic.id}`)}
+              emptyMessage={t.empty_list}
+            />
+        )}
       </div>
     </div>
   );

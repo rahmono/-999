@@ -1,77 +1,67 @@
+
 import { Grade, Subject, Topic, TopicImage } from '../types';
 
-const STORAGE_KEY = 'maktab_ai_db_v7';
-
-interface DBSchema {
-  grades: Grade[];
-  subjects: Subject[];
-  topics: Topic[];
-}
-
-const initialData: DBSchema = {
-  grades: [
-    { id: 'g1', name: 'Синфи 9' },
-    { id: 'g2', name: 'Синфи 10' },
-    { id: 'g3', name: 'Синфи 11' },
-  ],
-  subjects: [
-    { id: 's9_1', gradeId: 'g1', name: 'Алгебра' },
-    { id: 's10_1', gradeId: 'g2', name: 'Физика' },
-    { id: 's11_1', gradeId: 'g3', name: 'Информатика' },
-  ],
-  topics: [
-    { 
-        id: 't9_1', 
-        subjectId: 's9_1', 
-        name: 'Функсияи квадратӣ', 
-        content: 'Функсияи квадратӣ намуди $y = ax^2 + bx + c$ дорад.' 
-    }
-  ]
-};
-
-const getDB = (): DBSchema => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
-    return initialData;
-  }
-  return JSON.parse(stored);
-};
-
-const saveDB = (db: DBSchema) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-};
+const API_BASE = '/api';
 
 export const dbService = {
-  getGrades: (): Grade[] => getDB().grades,
-  addGrade: (name: string) => {
-    const db = getDB();
-    db.grades.push({ id: crypto.randomUUID(), name });
-    saveDB(db);
+  getGrades: async (): Promise<Grade[]> => {
+    const res = await fetch(`${API_BASE}/grades`);
+    return res.json();
   },
 
-  getSubjects: (gradeId: string): Subject[] => getDB().subjects.filter(s => s.gradeId === gradeId),
-  getSubjectById: (id: string): Subject | undefined => getDB().subjects.find(s => s.id === id),
-  addSubject: (gradeId: string, name: string) => {
-    const db = getDB();
-    db.subjects.push({ id: crypto.randomUUID(), gradeId, name });
-    saveDB(db);
-  },
-
-  getTopics: (subjectId: string): Topic[] => getDB().topics.filter(t => t.subjectId === subjectId),
-  getTopicById: (topicId: string): Topic | undefined => getDB().topics.find(t => t.id === topicId),
-  addTopic: (subjectId: string, name: string, content?: string, images?: TopicImage[]) => {
-    const db = getDB();
-    db.topics.push({ 
-      id: crypto.randomUUID(), 
-      subjectId, 
-      name, 
-      content, 
-      images: images && images.length > 0 ? images : undefined 
+  addGrade: async (name: string): Promise<void> => {
+    await fetch(`${API_BASE}/grades`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: crypto.randomUUID(), name })
     });
-    saveDB(db);
+  },
+
+  getSubjects: async (gradeId: string): Promise<Subject[]> => {
+    const res = await fetch(`${API_BASE}/subjects/${gradeId}`);
+    return res.json();
+  },
+
+  getSubjectById: async (id: string): Promise<Subject | undefined> => {
+    const res = await fetch(`${API_BASE}/subjects`);
+    const subjects: Subject[] = await res.json();
+    return subjects.find(s => s.id === id);
+  },
+
+  addSubject: async (gradeId: string, name: string): Promise<void> => {
+    await fetch(`${API_BASE}/subjects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: crypto.randomUUID(), gradeId, name })
+    });
+  },
+
+  getTopics: async (subjectId: string): Promise<Topic[]> => {
+    const res = await fetch(`${API_BASE}/topics/${subjectId}`);
+    return res.json();
+  },
+
+  getTopicById: async (topicId: string): Promise<Topic | undefined> => {
+    const res = await fetch(`${API_BASE}/topic/${topicId}`);
+    if (!res.ok) return undefined;
+    return res.json();
+  },
+
+  addTopic: async (subjectId: string, name: string, content?: string, images?: TopicImage[]): Promise<void> => {
+    await fetch(`${API_BASE}/topics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: crypto.randomUUID(), subjectId, name, content, images })
+    });
   },
   
-  getAllGrades: (): Grade[] => getDB().grades,
-  getAllSubjects: (): Subject[] => getDB().subjects,
+  getAllGrades: async (): Promise<Grade[]> => {
+    const res = await fetch(`${API_BASE}/grades`);
+    return res.json();
+  },
+
+  getAllSubjects: async (): Promise<Subject[]> => {
+    const res = await fetch(`${API_BASE}/subjects`);
+    return res.json();
+  },
 };

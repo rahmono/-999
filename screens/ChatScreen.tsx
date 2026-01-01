@@ -12,7 +12,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 const ChatScreen: React.FC = () => {
   const { topicId } = useParams<{ topicId: string }>();
-  const navigate = useNavigate();
   const [topic, setTopic] = useState<Topic | undefined>();
   const [gradeName, setGradeName] = useState<string>('');
   const [role, setRole] = useState<UserRole>(UserRole.STUDENT);
@@ -21,7 +20,6 @@ const ChatScreen: React.FC = () => {
   const [inputText, setInputText] = useState('');
   
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { t, language } = useLanguage();
 
   useEffect(() => {
@@ -29,17 +27,17 @@ const ChatScreen: React.FC = () => {
     if (storedRole) setRole(storedRole);
     
     if (topicId) {
-      const foundTopic = dbService.getTopicById(topicId);
-      setTopic(foundTopic);
-      
-      if (foundTopic) {
-        // Resolve grade name for AI context
-        const subject = dbService.getSubjectById(foundTopic.subjectId);
-        if (subject) {
-          const grade = dbService.getGrades().find(g => g.id === subject.gradeId);
-          if (grade) setGradeName(grade.name);
+      dbService.getTopicById(topicId).then(async (foundTopic) => {
+        setTopic(foundTopic);
+        if (foundTopic) {
+          const subject = await dbService.getSubjectById(foundTopic.subjectId);
+          if (subject) {
+            const grades = await dbService.getGrades();
+            const grade = grades.find(g => g.id === subject.gradeId);
+            if (grade) setGradeName(grade.name);
+          }
         }
-      }
+      });
     }
   }, [topicId]);
 
@@ -65,7 +63,7 @@ const ChatScreen: React.FC = () => {
       topic.content, 
       topic.images,
       role, 
-      gradeName || "Unknown Grade", // Provide grade context to AI
+      gradeName || "Unknown Grade",
       actionKey, 
       language
     );
@@ -102,7 +100,7 @@ const ChatScreen: React.FC = () => {
       ];
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gptDark-bg theme-transition">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900 transition-colors">
       <Header title={topic?.name || t.chat_title} showBack={true} />
       
       <div 
@@ -137,7 +135,7 @@ const ChatScreen: React.FC = () => {
                   AI
                 </div>
               )}
-              <div className={`text-base leading-relaxed ${msg.role === 'user' ? 'bg-gray-100 dark:bg-gptDark-bubble px-4 py-2 rounded-2xl text-gray-800 dark:text-gray-200' : 'text-gray-800 dark:text-gray-100 mt-1'}`}>
+              <div className={`text-base leading-relaxed ${msg.role === 'user' ? 'bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-2xl text-gray-800 dark:text-gray-200' : 'text-gray-800 dark:text-gray-100 mt-1'}`}>
                 {msg.role === 'model' ? (
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
@@ -166,7 +164,7 @@ const ChatScreen: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 md:px-8 pb-6 bg-white dark:bg-gptDark-bg">
+      <div className="p-4 md:px-8 pb-6 bg-white dark:bg-gray-900 border-t dark:border-gray-800">
         <div className="max-w-3xl mx-auto space-y-4">
             {messages.length === 0 && (
                 <div className="flex flex-wrap gap-2 justify-center">
@@ -174,7 +172,7 @@ const ChatScreen: React.FC = () => {
                     <button
                         key={action.key}
                         onClick={() => handleAction(action.key, action.label)}
-                        className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gptDark-bubble text-gray-600 dark:text-gray-400 transition-colors"
+                        className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
                     >
                         {action.label}
                     </button>
@@ -184,13 +182,12 @@ const ChatScreen: React.FC = () => {
 
             <form onSubmit={handleSend} className="relative group">
                 <textarea
-                    ref={inputRef}
                     rows={1}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={t.ask_placeholder}
-                    className="w-full bg-gray-100 dark:bg-gptDark-input border-none rounded-3xl py-4 pl-5 pr-14 text-base focus:ring-2 focus:ring-blue-500/50 outline-none resize-none dark:text-white placeholder-gray-500 transition-all max-h-40 no-scrollbar"
+                    className="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-3xl py-4 pl-5 pr-14 text-base focus:ring-2 focus:ring-blue-500/50 outline-none resize-none dark:text-white placeholder-gray-500 transition-all max-h-40 no-scrollbar"
                 />
                 <button 
                     type="submit"
@@ -202,9 +199,6 @@ const ChatScreen: React.FC = () => {
                     </svg>
                 </button>
             </form>
-            <p className="text-[10px] text-center text-gray-400 dark:text-gray-600 mt-2">
-                Мактаб AI метавонад хато кунад. Маълумоти муҳимро тафтиш кунед.
-            </p>
         </div>
       </div>
     </div>
