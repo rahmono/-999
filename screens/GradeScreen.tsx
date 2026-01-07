@@ -10,15 +10,24 @@ import { useLanguage } from '../contexts/LanguageContext';
 const GradeScreen: React.FC = () => {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { t } = useLanguage();
 
   useEffect(() => {
-    dbService.getGrades().then(data => {
-      setGrades(data);
-      setLoading(false);
-    });
-  }, []);
+    dbService.getGrades()
+      .then(data => {
+        setGrades(data);
+        setError(null);
+      })
+      .catch(err => {
+        console.error(err);
+        setError(t.ai_error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [t.ai_error]);
 
   const ProfileButton = (
     <button onClick={() => navigate('/profile')} className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-800 transition-colors">
@@ -38,6 +47,16 @@ const GradeScreen: React.FC = () => {
       <div className="flex-1 overflow-y-auto">
         {loading ? (
             <div className="p-8 text-center text-gray-500">{t.loading}</div>
+        ) : error ? (
+            <div className="p-8 text-center text-red-500 flex flex-col items-center gap-4">
+                <p>{error}</p>
+                <button 
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                >
+                    Retry
+                </button>
+            </div>
         ) : (
             <SelectionList 
               items={grades} 

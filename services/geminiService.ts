@@ -1,11 +1,12 @@
 
-import { UserRole, TopicImage } from "../types";
+// geminiService.ts
+
+import { UserRole } from "../types";
 import { Language } from "../contexts/LanguageContext";
 
 export const generateLessonContent = async (
-  topicName: string,
-  topicContent: string | undefined,
-  topicImages: TopicImage[] | undefined,
+  message: string,
+  subjectId: string, // Changed from topic details to subjectId
   role: UserRole,
   gradeName: string,
   actionKey: string,
@@ -16,9 +17,8 @@ export const generateLessonContent = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            topicName,
-            topicContent,
-            topicImages,
+            message,
+            subjectId,
             role,
             gradeName,
             actionKey,

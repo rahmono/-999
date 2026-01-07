@@ -3,16 +3,26 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { dbService } from '../services/dbService';
 import { generateLessonContent } from '../services/geminiService';
-import { Message, Topic, UserRole } from '../types';
+import { Message, Subject, UserRole } from '../types';
 import { Header } from '../components/Header';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useLanguage } from '../contexts/LanguageContext';
 
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 const ChatScreen: React.FC = () => {
-  const { topicId } = useParams<{ topicId: string }>();
-  const [topic, setTopic] = useState<Topic | undefined>();
+  const { subjectId } = useParams<{ subjectId: string }>();
+  const [subject, setSubject] = useState<Subject | undefined>();
   const [gradeName, setGradeName] = useState<string>('');
   const [role, setRole] = useState<UserRole>(UserRole.STUDENT);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -21,25 +31,24 @@ const ChatScreen: React.FC = () => {
   
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const storedRole = localStorage.getItem('user_role') as UserRole;
     if (storedRole) setRole(storedRole);
     
-    if (topicId) {
-      dbService.getTopicById(topicId).then(async (foundTopic) => {
-        setTopic(foundTopic);
-        if (foundTopic) {
-          const subject = await dbService.getSubjectById(foundTopic.subjectId);
-          if (subject) {
-            const grades = await dbService.getGrades();
-            const grade = grades.find(g => g.id === subject.gradeId);
-            if (grade) setGradeName(grade.name);
-          }
+    if (subjectId) {
+      dbService.getSubjectById(subjectId).then(async (foundSubject) => {
+        if (foundSubject) {
+          setSubject(foundSubject);
+          // Fetch grade name for context
+          const grades = await dbService.getAllGrades();
+          const g = grades.find(g => g.id === foundSubject.gradeId);
+          setGradeName(g?.name || "Синф");
         }
       });
     }
-  }, [topicId]);
+  }, [subjectId]);
 
   const scrollToBottom = () => {
     if (messagesContainerRef.current) {
@@ -52,25 +61,41 @@ const ChatScreen: React.FC = () => {
   }, [messages, isLoading]);
 
   const handleAction = async (actionKey: string, actionLabel: string) => {
-    if (!topic) return;
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', text: actionLabel, timestamp: Date.now() };
+    if (!subject) return;
+
+    const userMsg: Message = { 
+        id: generateId(), 
+        role: 'user', 
+        text: actionLabel,
+        timestamp: Date.now() 
+    };
+
     setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
     setInputText('');
 
-    const responseText = await generateLessonContent(
-      topic.name, 
-      topic.content, 
-      topic.images,
-      role, 
-      gradeName || "Unknown Grade",
-      actionKey, 
-      language
-    );
-    
-    const aiMsg: Message = { id: crypto.randomUUID(), role: 'model', text: responseText, timestamp: Date.now() };
-    setMessages(prev => [...prev, aiMsg]);
-    setIsLoading(false);
+    try {
+        const responseText = await generateLessonContent(
+          actionLabel,
+          subject.id,
+          role, 
+          gradeName,
+          actionKey, 
+          language
+        );
+        
+        const aiMsg: Message = { 
+            id: generateId(), 
+            role: 'model', 
+            text: responseText, 
+            timestamp: Date.now() 
+        };
+        setMessages(prev => [...prev, aiMsg]);
+    } catch (error) {
+        console.error("Chat error:", error);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   const handleSend = (e?: React.FormEvent) => {
@@ -87,6 +112,11 @@ const ChatScreen: React.FC = () => {
     }
   };
 
+  const handleBack = () => {
+     if(subject) navigate(`/subjects/${subject.gradeId}`);
+     else navigate('/grades');
+  }
+
   const actions = role === UserRole.TEACHER 
     ? [
         { key: 'act_lesson_plan', label: t.act_lesson_plan },
@@ -100,27 +130,34 @@ const ChatScreen: React.FC = () => {
       ];
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900 transition-colors">
-      <Header title={topic?.name || t.chat_title} showBack={true} />
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900 transition-colors overflow-hidden pb-[safe-bottom]">
+      <Header title={subject?.name || t.chat_title} showBack={true} onBack={handleBack} />
       
       <div 
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-8 no-scrollbar"
+        className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-6 no-scrollbar"
       >
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+          <div className="flex flex-col items-center justify-center min-h-full text-center space-y-4 px-4 py-8">
             <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                 </svg>
             </div>
-            <h2 className="text-2xl font-bold dark:text-white">{topic?.name}</h2>
+            <h2 className="text-2xl font-bold dark:text-white break-words w-full">{subject?.name}</h2>
             <div className="flex flex-col items-center gap-1">
                 <p className="text-xs text-gray-400 dark:text-gray-500">{gradeName}</p>
-                {topic?.images && (
-                <p className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded-full">
-                    {topic.images.length} расми контекстӣ мавҷуд аст
-                </p>
+                {subject?.pdfUri ? (
+                    <p className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded-full flex items-center gap-1">
+                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                       </svg>
+                       Китоби дарсӣ пайваст аст
+                    </p>
+                ) : (
+                    <p className="text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-1 rounded-full">
+                       Бе китоби дарсӣ
+                    </p>
                 )}
             </div>
             <p className="text-gray-500 dark:text-gray-400 max-w-xs">{t.start_prompt}</p>
@@ -129,16 +166,23 @@ const ChatScreen: React.FC = () => {
         
         {messages.map((msg) => (
           <div key={msg.id} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-              {msg.role === 'model' && (
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold">
-                  AI
-                </div>
-              )}
-              <div className={`text-base leading-relaxed ${msg.role === 'user' ? 'bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-2xl text-gray-800 dark:text-gray-200' : 'text-gray-800 dark:text-gray-100 mt-1'}`}>
+            <div className={`w-full flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`text-base leading-relaxed break-words max-w-[95%] ${
+                msg.role === 'user' 
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 px-4 py-2 rounded-2xl text-gray-800 dark:text-gray-200 shadow-sm' 
+                  : 'text-gray-800 dark:text-gray-100 whitespace-normal'
+              }`}>
                 {msg.role === 'model' ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                  <div className="prose prose-sm dark:prose-invert max-w-full overflow-x-hidden">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkMath]} 
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        p: ({node, ...props}) => <p className="mb-4 last:mb-0 break-words" {...props} />,
+                        ul: ({node, ...props}) => <ul className="mb-4 list-disc pl-5" {...props} />,
+                        ol: ({node, ...props}) => <ol className="mb-4 list-decimal pl-5" {...props} />,
+                      }}
+                    >
                         {msg.text}
                     </ReactMarkdown>
                   </div>
@@ -151,20 +195,15 @@ const ChatScreen: React.FC = () => {
         ))}
 
         {isLoading && (
-          <div className="flex gap-4">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold animate-pulse">
-              AI
-            </div>
-            <div className="flex items-center space-x-1 mt-3">
-              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
-              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-.3s]"></div>
-              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-.5s]"></div>
-            </div>
+          <div className="flex justify-start items-center space-x-1.5 py-2">
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"></div>
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:-.3s]"></div>
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce [animation-delay:-.5s]"></div>
           </div>
         )}
       </div>
 
-      <div className="p-4 md:px-8 pb-6 bg-white dark:bg-gray-900 border-t dark:border-gray-800">
+      <div className="p-4 md:px-6 pb-2 bg-white dark:bg-gray-900 border-t dark:border-gray-800">
         <div className="max-w-3xl mx-auto space-y-4">
             {messages.length === 0 && (
                 <div className="flex flex-wrap gap-2 justify-center">
@@ -172,7 +211,7 @@ const ChatScreen: React.FC = () => {
                     <button
                         key={action.key}
                         onClick={() => handleAction(action.key, action.label)}
-                        className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
+                        className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors whitespace-nowrap"
                     >
                         {action.label}
                     </button>
@@ -192,7 +231,7 @@ const ChatScreen: React.FC = () => {
                 <button 
                     type="submit"
                     disabled={!inputText.trim() || isLoading}
-                    className="absolute right-2.5 bottom-2.5 p-2 bg-black dark:bg-white text-white dark:text-black rounded-full disabled:opacity-30 transition-all"
+                    className="absolute right-2.5 bottom-2.5 p-2 bg-black dark:bg-white text-white dark:text-black rounded-full disabled:opacity-30 transition-all shadow-md"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                         <path d="M12 4v16m0-16l-5 5m5-5l5 5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />

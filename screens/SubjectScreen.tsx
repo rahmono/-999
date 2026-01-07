@@ -36,7 +36,7 @@ const SubjectScreen: React.FC = () => {
         ) : (
             <SelectionList 
               items={subjects} 
-              onSelect={(subject) => navigate(`/topics/${subject.id}`)}
+              onSelect={(subject) => navigate(`/chat/${subject.id}`)}
               emptyMessage={t.empty_list}
             />
         )}

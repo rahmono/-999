@@ -1,3 +1,4 @@
+
 export interface Grade {
   id: string;
   name: string;
@@ -7,6 +8,7 @@ export interface Subject {
   id: string;
   gradeId: string;
   name: string;
+  pdfUri?: string;
 }
 
 export interface TopicImage {
